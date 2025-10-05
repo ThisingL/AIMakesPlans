@@ -102,12 +102,15 @@ class TestLLMService:
         data = {
             "title": "Meeting",
             "type": "fixed",
-            "startTime": "2025-10-06T10:00:00",
-            "endTime": "2025-10-06T11:00:00"
+            "relativeDate": "明天",
+            "startHour": 10,
+            "endHour": 11
         }
         result = service._normalize_task_data(data)
         assert result["title"] == "Meeting"
         assert result["type"] == "fixed"
+        assert "startTime" in result  # 应该被转换为具体时间
+        assert "endTime" in result
         assert "priority" in result
         assert isinstance(result["tags"], list)
     
@@ -230,12 +233,13 @@ class TestLLMServiceWithMock:
     @patch('backend.app.services.llm_service.httpx.Client')
     def test_parse_text_to_task_fixed(self, mock_client_class):
         """Test parsing text to fixed task"""
-        # Setup mock response
+        # Setup mock response - 使用新格式（关键词格式）
         task_json = {
             "title": "团队会议",
             "type": "fixed",
-            "startTime": "2025-10-06T10:00:00",
-            "endTime": "2025-10-06T11:00:00",
+            "relativeDate": "明天",
+            "startHour": 10,
+            "endHour": 11,
             "priority": "P0",
             "location": "会议室A"
         }

@@ -294,12 +294,59 @@ def schedule_tasks(
         # 如果有截止时间，只在截止时间前搜索
         task_deadline = task.deadline if task.deadline else end_search
         
+        # 重要：根据deadline智能调整时间段限制
+        # 理解用户意图：
+        # - "明天下午" (deadline=18:00) → 只能在12:00-18:00之间
+        # - "明天上午" (deadline=12:00) → 只能在09:00-12:00之间  
+        # - "明天" (deadline=23:59) → 全天都可以09:00-18:00
+        
+        search_start = start_search
+        time_slot_start = None
+        time_slot_end = None
+        
+        if task.deadline:
+            deadline_hour = task_deadline.hour
+            deadline_minute = task_deadline.minute
+            
+            # 判断是否是特定时间段的限制
+            # 下午时段：deadline是18:00（整点）→ 限定在下午
+            if deadline_hour == 18 and deadline_minute == 0:
+                time_slot_start = task_deadline.replace(hour=12, minute=0, second=0, microsecond=0)
+                time_slot_end = task_deadline
+            # 上午时段：deadline是12:00（整点）→ 限定在上午
+            elif deadline_hour == 12 and deadline_minute == 0:
+                time_slot_start = task_deadline.replace(hour=9, minute=0, second=0, microsecond=0)
+                time_slot_end = task_deadline
+            # 晚上时段：deadline是23:00（整点）→ 限定在晚上
+            elif deadline_hour == 23 and deadline_minute == 0:
+                time_slot_start = task_deadline.replace(hour=18, minute=0, second=0, microsecond=0)
+                time_slot_end = task_deadline
+            # 全天：deadline是23:59 → 全天都可以
+            elif deadline_hour == 23 and deadline_minute == 59:
+                # 从当天早上开始，到晚上结束
+                time_slot_start = task_deadline.replace(hour=9, minute=0, second=0, microsecond=0)
+                time_slot_end = task_deadline.replace(hour=18, minute=0, second=0, microsecond=0)
+            
+            # 确保时间段不在过去
+            if time_slot_start and time_slot_start < datetime.now():
+                time_slot_start = datetime.now()
+        
         # 寻找合适的空闲槽
         assigned = False
         for slot in free_slots:
             # 检查是否在截止时间前
-            if slot.start > task_deadline:
+            if slot.end > task_deadline:
                 continue
+            
+            # 如果有时间段限制（如"下午"），检查是否在指定时间段内
+            if time_slot_start and time_slot_end:
+                # slot必须在指定时间段内
+                if slot.start < time_slot_start or slot.end > time_slot_end:
+                    continue
+            else:
+                # 没有特定时间段限制，只要不在过去即可
+                if slot.start < start_search:
+                    continue
             
             # 检查时长是否足够
             if slot.duration_minutes >= task.estimatedDuration:
@@ -307,25 +354,27 @@ def schedule_tasks(
                 scheduled_start = slot.start
                 scheduled_end = scheduled_start + timedelta(minutes=task.estimatedDuration)
                 
-                scheduled_tasks.append(ScheduledTask(
-                    task=task,
-                    scheduledStart=scheduled_start,
-                    scheduledEnd=scheduled_end,
-                    reason=f"根据{policy}策略分配到空闲时段"
-                ))
-                
-                # 更新这个槽（分割或移除）
-                remaining_duration = slot.duration_minutes - task.estimatedDuration
-                if remaining_duration >= preference.minBlockUnit:
-                    # 还有剩余时间，更新槽
-                    slot.start = scheduled_end + timedelta(minutes=preference.bufferBetweenEvents)
-                    slot.duration_minutes = remaining_duration - preference.bufferBetweenEvents
-                else:
-                    # 没有足够剩余时间，移除这个槽
-                    free_slots.remove(slot)
-                
-                assigned = True
-                break
+                # 最后检查：确保结束时间不超过deadline
+                if scheduled_end <= task_deadline:
+                    scheduled_tasks.append(ScheduledTask(
+                        task=task,
+                        scheduledStart=scheduled_start,
+                        scheduledEnd=scheduled_end,
+                        reason=f"根据{policy}策略分配到空闲时段，在截止时间前完成"
+                    ))
+                    
+                    # 更新这个槽（分割或移除）
+                    remaining_duration = slot.duration_minutes - task.estimatedDuration
+                    if remaining_duration >= preference.minBlockUnit:
+                        # 还有剩余时间，更新槽
+                        slot.start = scheduled_end + timedelta(minutes=preference.bufferBetweenEvents)
+                        slot.duration_minutes = remaining_duration - preference.bufferBetweenEvents
+                    else:
+                        # 没有足够剩余时间，移除这个槽
+                        free_slots.remove(slot)
+                    
+                    assigned = True
+                    break
         
         if not assigned:
             unscheduled_tasks.append(task)

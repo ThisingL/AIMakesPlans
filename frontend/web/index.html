@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIMakesPlans - AI智能日程助理</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <header class="header">
+            <h1>🤖 AIMakesPlans</h1>
+            <p class="subtitle">AI驱动的智能日程助理</p>
+            <div class="status">
+                <span id="api-status" class="status-indicator">检查中...</span>
+            </div>
+        </header>
+
+        <div class="layout">
+            <!-- 左侧：日历视图 -->
+            <aside class="sidebar">
+                <section class="calendar-section">
+                    <h2>📅 日历</h2>
+                    <div id="calendar" class="calendar"></div>
+                </section>
+                
+                <section class="quick-stats">
+                    <h3>📊 统计</h3>
+                    <div class="stat-item">
+                        <span class="stat-label">总任务：</span>
+                        <span class="stat-value" id="total-tasks">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">已完成：</span>
+                        <span class="stat-value" id="completed-tasks">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">进行中：</span>
+                        <span class="stat-value" id="inprogress-tasks">0</span>
+                    </div>
+                </section>
+            </aside>
+
+            <!-- 右侧：主要内容 -->
+            <main class="main-content">
+                <!-- Tab 切换 -->
+                <div class="tabs">
+                    <button class="tab active" data-tab="input">📝 创建任务</button>
+                    <button class="tab" data-tab="schedule">📋 当日日程</button>
+                </div>
+
+                <!-- Tab 内容：创建任务 -->
+                <div id="input-tab" class="tab-content active">
+                    <section class="input-section">
+                        <div class="input-group">
+                            <textarea 
+                                id="task-input" 
+                                placeholder="用自然语言描述你的任务，例如：&#10;• 明天下午做2小时报告&#10;• 下周三上午10点开会&#10;• 本周五之前完成项目文档"
+                                rows="4"
+                            ></textarea>
+                            <button id="parse-btn" class="btn btn-primary">
+                                <span class="btn-icon">✨</span>
+                                解析任务
+                            </button>
+                        </div>
+                        
+                        <!-- 示例区 -->
+                        <div class="examples-section">
+                            <h3>💡 试试这些示例：</h3>
+                            <div class="examples">
+                                <button class="example-btn" data-text="明天下午做2小时报告">
+                                    明天下午做2小时报告
+                                </button>
+                                <button class="example-btn" data-text="下周一上午10点到11点开会">
+                                    下周一上午10点到11点开会
+                                </button>
+                                <button class="example-btn" data-text="紧急：今天必须完成项目文档">
+                                    紧急：今天必须完成项目文档
+                                </button>
+                                <button class="example-btn" data-text="写周报，大概需要1小时">
+                                    写周报，大概需要1小时
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- 解析结果展示区 -->
+                    <section class="result-section" id="parse-result-section" style="display: none;">
+                        <h2>📋 解析结果</h2>
+                        <div id="parse-result" class="result-card"></div>
+                        <div class="action-buttons">
+                            <button id="save-task-btn" class="btn btn-primary">
+                                <span class="btn-icon">💾</span>
+                                保存任务
+                            </button>
+                            <button id="schedule-now-btn" class="btn btn-secondary">
+                                <span class="btn-icon">🎯</span>
+                                立即调度
+                            </button>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Tab 内容：当日日程 -->
+                <div id="schedule-tab" class="tab-content">
+                    <section class="daily-schedule-section">
+                        <div class="schedule-header">
+                            <h2 id="selected-date-title">📅 今天的日程</h2>
+                            <button id="refresh-schedule-btn" class="btn-icon-only" title="刷新">
+                                🔄
+                            </button>
+                        </div>
+                        <div id="daily-schedule" class="daily-schedule">
+                            <p class="empty-state">选择日期查看该日的日程安排</p>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+
+        <!-- 页脚 -->
+        <footer class="footer">
+            <p>Powered by FastAPI + AI | 
+                <a href="http://127.0.0.1:8000/docs" target="_blank">API文档</a> | 
+                <a href="https://github.com/yourusername/AIMakesPlans" target="_blank">GitHub</a>
+            </p>
+        </footer>
+    </div>
+
+    <!-- 加载提示 -->
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner"></div>
+        <p>AI正在思考中...</p>
+    </div>
+
+    <!-- Toast 通知 -->
+    <div id="toast" class="toast"></div>
+
+    <!-- 调度结果模态框 -->
+    <div id="schedule-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📊 调度方案</h2>
+                <button class="modal-close" onclick="closeScheduleModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="schedule-modal-body"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeScheduleModal()">取消</button>
+                <button class="btn btn-primary" onclick="confirmSchedule()">应用调度方案</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

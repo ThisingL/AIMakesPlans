@@ -145,55 +145,69 @@ class LLMService:
         """获取解析任务的系统提示词"""
         return """你是一个专业的日程管理助手。你的任务是将用户的自然语言描述解析为结构化的任务数据。
 
-任务类型说明：
-- fixed: 固定任务，有明确的开始和结束时间（如会议、约会）
-- flexible: 灵活任务，只有预估时长和可选的截止日期（如写报告、学习）
+【重要】任务类型判断规则：
+1. **fixed（固定任务）**：用户明确说了具体的开始和结束时间
+   - 例子："明天上午10点到11点开会" → type: "fixed"
+   - 例子："下周三下午2点在会议室开会" → type: "fixed"
+   - 关键词：X点到Y点、X时至Y时、具体时间段
+   
+2. **flexible（灵活任务）**：只说了需要多长时间，没有指定具体何时开始
+   - 例子："明天下午做2小时报告" → type: "flexible"
+   - 例子："写周报，大概需要1小时" → type: "flexible"
+   - 关键词：做X小时、需要X时间、大概X分钟
 
 优先级说明：
-- P0: 紧急且重要
-- P1: 重要但不紧急
-- P2: 不重要但紧急
+- P0: 紧急且重要（关键词：紧急、必须、立即、马上）
+- P1: 重要但不紧急（关键词：重要、关键）
+- P2: 普通（默认）
 - P3: 不重要也不紧急
 
-请严格按照以下JSON格式输出，不要包含任何注释或额外文字：
+严格JSON格式输出规则：
 
-对于固定任务(fixed):
+【重要】不要自己计算具体日期！只提取时间关键词，具体日期由系统计算。
+
+1. 固定任务(fixed)格式：
 {
-  "title": "任务标题",
-  "description": "详细描述",
+  "title": "会议",
   "type": "fixed",
-  "startTime": "2025-10-06T14:00:00",
-  "endTime": "2025-10-06T15:00:00",
+  "relativeDate": "下周一",  ← 提取关键词，不计算具体日期
+  "startHour": 10,          ← 只提取小时数
+  "endHour": 11,            ← 只提取小时数
+  "startMinute": 0,         ← 分钟（可选，默认0）
+  "endMinute": 0,           ← 分钟（可选，默认0）
   "priority": "P1",
-  "location": "地点（可选）",
-  "tags": ["标签1", "标签2"]
+  "location": "会议室"       ← 可选
 }
 
-对于灵活任务(flexible):
+2. 灵活任务(flexible)格式：
 {
-  "title": "任务标题",
-  "description": "详细描述",
+  "title": "写报告",
   "type": "flexible",
-  "estimatedDuration": 120,
-  "deadline": "2025-10-08T18:00:00",
-  "priority": "P2",
-  "tags": ["标签1", "标签2"]
+  "estimatedDuration": 120,  ← 分钟数
+  "relativeDate": "明天",    ← 关键词
+  "timePeriod": "下午",      ← 时间段关键词（上午/下午/晚上/全天）
+  "priority": "P2"
 }
 
-时间格式要求：
-- 使用ISO 8601格式：YYYY-MM-DDTHH:MM:SS
-- 相对时间转换：
-  - "今天" = 当前日期
-  - "明天" = 当前日期+1天
-  - "后天" = 当前日期+2天
-  - "下周X" = 下周对应星期几
-  - "上午" = 09:00, "中午" = 12:00, "下午" = 14:00, "晚上" = 19:00
+相对日期关键词（直接提取，不计算）：
+- 今天、明天、后天、大后天
+- 下周一、下周二...下周日
+- 本周一、本周二...本周日
+- 这个月X号、本月X号（如"这个月19号"）
+- X月X号（如"10月19号"）
+- X天后（如"3天后"）
 
-时长单位：
-- estimatedDuration使用分钟为单位
-- "1小时" = 60, "2小时" = 120, "半小时" = 30
+时间段关键词：
+- "上午"、"下午"、"晚上"、"中午"
+- 如果没说时间段 → "全天"
 
-只输出JSON，不要有任何其他文字。"""
+时长提取：
+- "1小时" → 60
+- "2小时" → 120  
+- "半小时" → 30
+- "1.5小时" → 90
+
+只输出JSON，不要任何额外文字或markdown标记。"""
     
     def _get_parse_user_prompt(
         self,
@@ -203,25 +217,71 @@ class LLMService:
         """获取解析任务的用户提示词"""
         current_time = datetime.now()
         
-        prompt = f"""当前时间：{current_time.strftime('%Y-%m-%d %H:%M:%S')}
+        # 计算各种相对日期
+        tomorrow = current_time + timedelta(days=1)
+        day_after = current_time + timedelta(days=2)
+        
+        # 计算下周的日期（下周一到下周日）
+        # 当前是周几（0=周一，6=周日）
+        current_weekday = current_time.weekday()
+        days_until_next_monday = (7 - current_weekday) % 7
+        if days_until_next_monday == 0:
+            days_until_next_monday = 7  # 如果今天是周一，下周一是7天后
+        
+        next_week_dates = {}
+        weekday_names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+        for i, name in enumerate(weekday_names):
+            days_offset = days_until_next_monday + i
+            next_date = current_time + timedelta(days=days_offset)
+            next_week_dates[name] = next_date.strftime('%Y-%m-%d')
+        
+        prompt = f"""【当前时间信息】
+今天是：{current_time.strftime('%Y年%m月%d日 %A')}
+现在时刻：{current_time.strftime('%H:%M:%S')}
+明天日期：{tomorrow.strftime('%Y-%m-%d (%A)')}
+后天日期：{day_after.strftime('%Y-%m-%d (%A)')}
 
-用户输入：{text}"""
+下周日期参考：
+- 下周一：{next_week_dates['周一']}
+- 下周二：{next_week_dates['周二']}
+- 下周三：{next_week_dates['周三']}
+- 下周四：{next_week_dates['周四']}
+- 下周五：{next_week_dates['周五']}
+- 下周六：{next_week_dates['周六']}
+- 下周日：{next_week_dates['周日']}
+
+【用户输入】
+{text}"""
         
         if preference:
             prompt += f"""
 
-用户偏好：
+【用户偏好】
 - 最大专注时长：{preference.maxFocusDuration}分钟
 - 最小时间块：{preference.minBlockUnit}分钟"""
         
         prompt += """
 
-请将上述自然语言描述解析为JSON格式的任务数据。"""
+【任务要求】
+请严格按照用户输入的时间要求解析：
+- 如果说"明天"，使用明天的日期
+- 如果说"今天"，使用今天的日期
+- 如果说"下午"，使用14:00作为参考时间
+- 如果说"上午"，使用09:00或10:00作为参考时间
+- 如果说"X点到Y点"，type必须是"fixed"，必须包含startTime和endTime
+- 如果只说"做X小时"，type应该是"flexible"，包含estimatedDuration和deadline
+
+请输出JSON格式的任务数据。"""
         
         return prompt
     
     def _normalize_task_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """规范化和验证任务数据"""
+        """
+        规范化和验证任务数据
+        使用date_parser将相对日期转换为具体日期
+        """
+        from backend.app.services.date_parser import parse_relative_date, parse_time_period, build_datetime
+        
         # 确保必要字段存在
         if "title" not in data:
             raise LLMServiceError("Missing required field: title")
@@ -233,16 +293,66 @@ class LLMService:
         if data["type"] not in ["fixed", "flexible"]:
             raise LLMServiceError(f"Invalid task type: {data['type']}")
         
-        # 验证固定任务的必要字段
-        if data["type"] == "fixed":
-            if "startTime" not in data or "endTime" not in data:
-                raise LLMServiceError("Fixed task must have startTime and endTime")
+        current_time = datetime.now()
         
-        # 验证灵活任务的必要字段
-        if data["type"] == "flexible":
+        # 处理固定任务的时间
+        if data["type"] == "fixed":
+            relative_date = data.get("relativeDate", "今天")
+            start_hour = data.get("startHour")
+            end_hour = data.get("endHour")
+            start_minute = data.get("startMinute", 0)
+            end_minute = data.get("endMinute", 0)
+            
+            if start_hour is None or end_hour is None:
+                raise LLMServiceError("Fixed task must have startHour and endHour")
+            
+            # 使用date_parser精确计算日期
+            target_date = parse_relative_date(relative_date, current_time)
+            if target_date is None:
+                raise LLMServiceError(f"Cannot parse relative date: {relative_date}")
+            
+            # 构建完整的datetime
+            data["startTime"] = build_datetime(target_date, start_hour, start_minute).isoformat()
+            data["endTime"] = build_datetime(target_date, end_hour, end_minute).isoformat()
+            
+            # 移除中间字段
+            data.pop("relativeDate", None)
+            data.pop("startHour", None)
+            data.pop("endHour", None)
+            data.pop("startMinute", None)
+            data.pop("endMinute", None)
+        
+        # 处理灵活任务的deadline
+        elif data["type"] == "flexible":
             if "estimatedDuration" not in data:
-                # 默认值：2小时
-                data["estimatedDuration"] = 120
+                data["estimatedDuration"] = 120  # 默认2小时
+            
+            relative_date = data.get("relativeDate", "今天")
+            time_period = data.get("timePeriod", "全天")
+            
+            # 使用date_parser精确计算日期
+            target_date = parse_relative_date(relative_date, current_time)
+            if target_date is None:
+                # 如果无法解析，默认为明天
+                target_date = current_time + timedelta(days=1)
+            
+            # 根据时间段设置deadline
+            if time_period == "上午":
+                deadline = build_datetime(target_date, 12, 0)
+            elif time_period == "下午":
+                deadline = build_datetime(target_date, 18, 0)
+            elif time_period == "晚上":
+                deadline = build_datetime(target_date, 23, 0)
+            elif time_period == "中午":
+                deadline = build_datetime(target_date, 13, 0)
+            else:  # "全天"或其他
+                deadline = build_datetime(target_date, 23, 59)
+            
+            data["deadline"] = deadline.isoformat()
+            
+            # 移除中间字段
+            data.pop("relativeDate", None)
+            data.pop("timePeriod", None)
         
         # 确保优先级有效
         if "priority" not in data:
