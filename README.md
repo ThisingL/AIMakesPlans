@@ -76,45 +76,97 @@ frontend/
 
 ### 快速开始
 
-#### 1. 激活conda环境并安装依赖
+#### 1. 克隆项目
 
 ```bash
-# 激活conda环境
-conda activate project_ai_makes_plans
+git clone https://github.com/yourusername/AIMakesPlans.git
+cd AIMakesPlans
+```
 
-# 安装依赖（如果还没安装）
+#### 2. 创建 Conda 环境
+
+```bash
+conda create -n project_ai_makes_plans python=3.11
+conda activate project_ai_makes_plans
+```
+
+#### 3. 安装依赖
+
+```bash
 pip install -r requirements.txt
 ```
 
-#### 2. 启动后端服务器
+#### 4. 配置环境变量 ⭐ 重要
 
+**方式1：复制模板文件**
 ```bash
-# 方式1：使用uvicorn命令
-uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
+# Windows PowerShell
+copy .env.example .env
 
-# 方式2：使用Python模块
-python -m uvicorn backend.app.main:app --reload
+# Linux/macOS
+cp .env.example .env
 ```
 
-#### 3. 验证服务运行
+**方式2：手动创建 .env 文件**
 
-```bash
-# 健康检查
-curl http://127.0.0.1:8000/health
+在项目根目录创建 `.env` 文件，内容如下：
 
-# 访问API文档
-# 浏览器打开: http://127.0.0.1:8000/docs
+```env
+# LLM Provider Configuration
+LLM_PROVIDER=siliconflow
+LLM_MODEL=Qwen/Qwen2.5-7B-Instruct
+LLM_BASE_URL=https://api.siliconflow.cn/v1
+MAX_TOKENS=4096
+
+# API Key - 在这里填入你的硅基流动 API Key
+OPENAI_API_KEY=your-api-key-here
+
+# Server Configuration
+PORT=8000
+HOST=0.0.0.0
+
+# Priority Policy
+PRIORITY_POLICY=eisenhower
 ```
 
-#### 4. 运行测试
+**获取 API Key：**
+- 访问：https://siliconflow.cn/
+- 注册账号并获取 API Key
+- 将 API Key 替换到 `.env` 文件中的 `OPENAI_API_KEY`
+
+#### 5. 启动后端服务
 
 ```bash
-# 运行所有测试
-pytest backend/tests/ -v
+uvicorn app.main:app --reload
+```
+
+启动成功后，你会看到：
+```
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process
+INFO:     Started server process
+INFO:     Application startup complete.
+```
+
+#### 6. 访问 API 文档
+
+打开浏览器访问：
+- **Swagger UI**: http://127.0.0.1:8000/docs （推荐，可直接测试API）
+- **ReDoc**: http://127.0.0.1:8000/redoc
+- **健康检查**: http://127.0.0.1:8000/health
+
+#### 7. 测试 API（可选）
+
+```bash
+# 运行所有单元测试
+pytest backend/tests/ -v -m "not integration"
+
+# 运行集成测试（需要真实API调用）
+pytest backend/tests/test_parsing_integration.py -v
 
 # 运行特定测试
 pytest backend/tests/test_api.py -v
-pytest backend/tests/test_schemas.py -v
+pytest backend/tests/test_llm_service.py -v
 ```
 
 ### 环境变量（示例）
