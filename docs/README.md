@@ -5,14 +5,14 @@
 ### 阅读顺序
 
 1. `00_overview_and_prompts.md`：总览、通用提示词模板与任务拆解
-2. `01_backend_api.md`：Python 后端（FastAPI）API 设计与实现提示词（含测试）
-3. `02_llm_service_and_prompt_engineering.md`：LLM 调用封装与提示词工程（含测试）
-4. `03_scheduling_and_conflicts.md`：解析、冲突检测与调度算法（含测试）
-5. `04_frontend_web.md`：Web 前端实现与对接（含测试）
-6. `05_ics_integration.md`：ICS 导入/导出与日历兼容（含测试）
-7. `06_testing_and_ci.md`：测试策略、覆盖率与 CI 流水线
-8. `07_deploy_and_ops.md`：部署与运维（Docker/Compose/环境变量/监控）
-9. `08_preferences_priority_status.md`：用户偏好、优先级策略与动态状态/休息模式
+2. `01_backend_api.md`：Python 后端（FastAPI）API 设计与实现提示词（含测试）✅ 已完成
+3. `02_llm_service_and_prompt_engineering.md`：LLM 调用封装与提示词工程（含测试）✅ 已完成
+4. `03_scheduling_and_conflicts.md`：解析、冲突检测与调度算法（含测试）✅ 已完成
+5. `04_frontend_web.md`：Web 前端实现与对接（含测试）✅ 已完成
+6. `05_preferences_priority_status.md`：用户偏好、优先级策略与动态状态/休息模式 ✅ 已完成
+7. `06_ics_integration.md`：ICS 导入/导出与日历兼容（含测试）⏳ 待实现
+8. `07_deploy_and_ops.md`：部署与运维（Docker/Compose/环境变量/监控）⏳ 待实现
+9. `08_testing_and_ci.md`：测试策略、覆盖率与 CI 流水线 ✅ 已有基础测试
 
 ### 如何使用这些提示词与步骤
 
