@@ -3,16 +3,14 @@ Schedule API endpoints.
 Handles scheduling and planning of tasks.
 """
 from fastapi import APIRouter, HTTPException, status
-from datetime import datetime, timedelta
 
 from backend.app.models.schemas import (
     SchedulePlanRequest,
     SchedulePlan,
-    ScheduledTask,
-    Conflict,
     UserPreference,
     UserStatus
 )
+from backend.app.services.scheduling import schedule_tasks
 
 router = APIRouter(prefix="/schedule")
 
@@ -20,56 +18,70 @@ router = APIRouter(prefix="/schedule")
 @router.post("/plan", response_model=SchedulePlan)
 async def plan_schedule(request: SchedulePlanRequest) -> SchedulePlan:
     """
-    Create a schedule plan for given tasks.
+    Create a schedule plan for given tasks using intelligent scheduling algorithm.
     
-    Takes into account:
-    - Existing events
-    - User preferences (working hours, buffer times, etc.)
-    - User status (busy/idle, rest mode)
-    - Task priorities and deadlines
+    This endpoint analyzes tasks, existing events, and user preferences to create
+    an optimal schedule that:
+    - Detects and reports conflicts
+    - Respects working hours and no-disturb slots
+    - Considers task priorities and deadlines
+    - Applies buffer times between events
+    - Handles user status (busy/rest mode)
     
-    For MVP, this is a placeholder that returns a mock plan.
-    Will be replaced with actual scheduling algorithm.
+    Args:
+        request: SchedulePlanRequest containing:
+            - tasks: List of tasks to schedule
+            - existingEvents: Current calendar events
+            - preference: User scheduling preferences (optional)
+            - userStatus: User current status (optional)
+    
+    Returns:
+        SchedulePlan with:
+            - scheduledTasks: Successfully scheduled tasks with assigned time slots
+            - conflicts: Detected scheduling conflicts
+            - unscheduledTasks: Tasks that couldn't be scheduled
+            - explanation: Human-readable explanation of the plan
+    
+    Examples:
+        Request:
+        ```json
+        {
+            "tasks": [
+                {
+                    "title": "写代码",
+                    "type": "flexible",
+                    "estimatedDuration": 120,
+                    "priority": "P1"
+                }
+            ],
+            "existingEvents": [],
+            "preference": {
+                "workingHours": [{"start": "09:00", "end": "18:00"}],
+                "bufferBetweenEvents": 15
+            }
+        }
+        ```
     """
-    tasks = request.tasks
-    existing_events = request.existingEvents
-    preference = request.preference or UserPreference()
-    user_status = request.userStatus or UserStatus()
-    
-    # Placeholder scheduling logic
-    # For now, just return an empty plan with explanation
-    
-    scheduled_tasks = []
-    conflicts = []
-    unscheduled_tasks = list(tasks)
-    
-    # Simple placeholder: try to schedule first task
-    if tasks:
-        first_task = tasks[0]
-        if first_task.type.value == "flexible" and first_task.estimatedDuration:
-            # Schedule for next available slot (tomorrow 9 AM for demo)
-            scheduled_start = datetime.now().replace(hour=9, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            scheduled_end = scheduled_start + timedelta(minutes=first_task.estimatedDuration)
-            
-            scheduled_tasks.append(ScheduledTask(
-                task=first_task,
-                scheduledStart=scheduled_start,
-                scheduledEnd=scheduled_end,
-                reason="Scheduled to first available slot in working hours"
-            ))
-            unscheduled_tasks = tasks[1:]
-    
-    explanation = (
-        f"Scheduled {len(scheduled_tasks)} tasks, "
-        f"found {len(conflicts)} conflicts, "
-        f"{len(unscheduled_tasks)} tasks remain unscheduled. "
-        "This is a placeholder response - actual scheduling algorithm will be implemented."
-    )
-    
-    return SchedulePlan(
-        scheduledTasks=scheduled_tasks,
-        conflicts=conflicts,
-        unscheduledTasks=unscheduled_tasks,
-        explanation=explanation
-    )
-
+    try:
+        # 获取参数，使用默认值
+        tasks = request.tasks
+        existing_events = request.existingEvents
+        preference = request.preference or UserPreference()
+        user_status = request.userStatus or UserStatus()
+        
+        # 调用调度算法
+        plan = schedule_tasks(
+            tasks=tasks,
+            events=existing_events,
+            preference=preference,
+            user_status=user_status,
+            search_days=7  # 搜索未来7天的空闲时间
+        )
+        
+        return plan
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Scheduling error: {str(e)}"
+        )
