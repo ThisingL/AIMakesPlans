@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # 后端API服务
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aimakesplans-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # LLM配置（从.env文件读取）
+      - LLM_PROVIDER=${LLM_PROVIDER:-siliconflow}
+      - LLM_MODEL=${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.siliconflow.cn/v1}
+      - MAX_TOKENS=${MAX_TOKENS:-4096}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-BAAI/bge-large-zh-v1.5}
+      # 服务器配置
+      - PORT=8000
+      - HOST=0.0.0.0
+      - PRIORITY_POLICY=${PRIORITY_POLICY:-eisenhower}
+    env_file:
+      - .env
+    networks:
+      - aimakesplans-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # 前端静态文件服务（使用Nginx）
+  frontend:
+    # 使用官方镜像（配合Docker镜像加速器）
+    image: nginx:alpine
+    container_name: aimakesplans-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend/web:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - aimakesplans-network
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  aimakesplans-network:
+    driver: bridge
+

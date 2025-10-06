@@ -110,6 +110,129 @@ AI驱动的时间管理革命：让 LLM 成为你的智能日程助理，负责"
 
 **下一步计划：** ICS集成、数据持久化、更多可视化功能
 
+---
+
+## 🐳 Docker部署（阿里云服务器）
+
+### 快速部署到阿里云ECS
+
+#### 第1步：配置Docker镜像加速器
+
+由于国内访问Docker Hub较慢，需要配置镜像加速器：
+
+```bash
+# 1. 创建或编辑Docker配置文件
+sudo mkdir -p /etc/docker
+sudo nano /etc/docker/daemon.json
+```
+
+添加以下内容（已验证可用的镜像源）：
+```json
+{
+  "registry-mirrors": [
+    "https://docker.m.daocloud.io",
+    "https://mirror.baidubce.com",
+    "https://dockerproxy.com",
+    "https://docker.mirrors.ustc.edu.cn"
+  ]
+}
+```
+
+重启Docker使配置生效：
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+
+# 验证配置
+docker info | grep -A 5 "Registry Mirrors"
+```
+
+#### 第2步：上传代码到服务器
+
+```bash
+# 方式1：使用Git
+git clone https://github.com/yourusername/AIMakesPlans.git
+cd AIMakesPlans
+
+# 方式2：使用scp（从本地上传）
+scp -r AIMakesPlans root@your-server-ip:~/
+```
+
+#### 第3步：配置环境变量
+
+```bash
+# 在服务器上创建.env文件
+cd ~/AIMakesPlans
+nano .env
+```
+
+填入你的配置（和本地.env文件内容相同）：
+```env
+LLM_PROVIDER=siliconflow
+LLM_MODEL=Qwen/Qwen2.5-7B-Instruct
+LLM_BASE_URL=https://api.siliconflow.cn/v1
+MAX_TOKENS=4096
+OPENAI_API_KEY=your-api-key-here
+EMBEDDING_MODEL=BAAI/bge-large-zh-v1.5
+PORT=8000
+HOST=0.0.0.0
+PRIORITY_POLICY=eisenhower
+```
+
+
+#### 第4步：启动服务
+
+```bash
+# 构建并启动
+docker-compose up -d --build
+
+# 查看状态
+docker-compose ps
+
+# 查看日志
+docker-compose logs -f
+```
+
+#### 第5步：配置阿里云安全组
+
+在阿里云控制台：
+1. 进入ECS实例
+2. 安全组 → 配置规则 → 添加安全组规则
+3. 开放端口：
+   - 端口范围：`8000/8000`（后端API）
+   - 端口范围：`3000/3000`（前端界面）
+   - 授权对象：`0.0.0.0/0`
+
+#### 第6步：访问系统
+
+```
+前端界面：http://your-server-ip:3000
+API文档：http://your-server-ip:8000/docs
+```
+
+### 常用Docker命令
+
+```bash
+# 查看服务状态
+docker-compose ps
+
+# 查看日志
+docker-compose logs -f backend
+
+# 重启服务
+docker-compose restart
+
+# 停止服务
+docker-compose down
+
+# 更新代码后重新部署
+git pull
+docker-compose up -d --build
+```
+
+**完整部署文档（含Nginx配置、HTTPS等高级功能）：** [DEPLOYMENT.md](docs/DEPLOYMENT.md)
+
+---
 
 ### 功能完整列表
 

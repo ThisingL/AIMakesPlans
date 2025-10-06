@@ -1,5 +1,8 @@
 // ==================== 配置 ====================
-const API_BASE_URL = 'http://127.0.0.1:8000';
+// 自动检测环境
+const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://127.0.0.1:8000'  // 本地开发
+    : `http://${window.location.hostname}:8000`;  // 生产环境，自动使用当前域名/IP
 
 // ==================== 全局状态 ====================
 let currentTask = null;
