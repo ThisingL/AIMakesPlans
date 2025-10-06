@@ -207,6 +207,92 @@ async function fetchAllTasks() {
 }
 
 /**
+ * 获取用户偏好
+ */
+async function fetchPreferences() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/v1/user/preferences`);
+        
+        if (!response.ok) {
+            throw new Error('获取偏好失败');
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('获取偏好失败:', error);
+        return null;
+    }
+}
+
+/**
+ * 保存用户偏好
+ */
+async function savePreferences(preferences) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/v1/user/preferences`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(preferences)
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || '保存失败');
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('保存偏好失败:', error);
+        throw error;
+    }
+}
+
+/**
+ * 获取用户状态
+ */
+async function fetchUserStatus() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/v1/user/status`);
+        
+        if (!response.ok) {
+            throw new Error('获取状态失败');
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('获取状态失败:', error);
+        return null;
+    }
+}
+
+/**
+ * 更新用户状态
+ */
+async function updateUserStatus(status) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/v1/user/status`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(status)
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || '更新失败');
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('更新状态失败:', error);
+        throw error;
+    }
+}
+
+/**
  * 删除任务
  */
 async function deleteTask(taskId) {
@@ -309,6 +395,8 @@ function renderCalendar() {
             selectedDate = date;
             renderCalendar();
             renderDailySchedule(date);
+            // 自动切换到"当日日程"Tab
+            switchTab('schedule');
         });
         
         calendar.appendChild(dayEl);
@@ -418,18 +506,29 @@ function renderDailySchedule(date) {
         html += '</div>';
         
         // 操作按钮
+        html += '<div class="schedule-item-actions">';
+        
         if (task.status !== 'completed') {
             html += `
-                <div class="schedule-item-actions">
-                    <button class="btn-complete" onclick="markTaskComplete('${task.id}')">
-                        ✓ 完成
-                    </button>
-                    <button class="btn-delete" onclick="deleteTaskById('${task.id}')">
-                        ✗ 删除
-                    </button>
-                </div>
+                <button class="btn-complete" onclick="markTaskComplete('${task.id}')">
+                    ✓ 完成
+                </button>
+            `;
+        } else {
+            html += `
+                <button class="btn-complete" onclick="markTaskIncomplete('${task.id}')" style="background: var(--warning-color);">
+                    ↩ 恢复
+                </button>
             `;
         }
+        
+        html += `
+            <button class="btn-delete" onclick="deleteTaskById('${task.id}')">
+                ✗ 删除
+            </button>
+        `;
+        
+        html += '</div>';
         
         html += '</div>';
     });
@@ -896,29 +995,32 @@ async function confirmSchedule() {
         
         // 应用调度方案：将调度后的时间更新到任务
         if (planToApply.scheduledTasks && planToApply.scheduledTasks.length > 0) {
-            const scheduledItem = planToApply.scheduledTasks[0];  // 只处理当前任务
-            const task = scheduledItem.task;
+            // 先删除原始的灵活任务（如果有的话）
+            if (taskWithId.id && taskWithId.type === 'flexible') {
+                await deleteTask(taskWithId.id);
+            }
             
-            // 如果是灵活任务被调度了，转换为固定任务
-            if (task.type === 'flexible' && scheduledItem.scheduledStart && scheduledItem.scheduledEnd) {
-                // 删除刚保存的灵活任务
-                if (taskWithId.id) {
-                    await deleteTask(taskWithId.id);
+            // 保存所有调度后的任务（可能是拆分的多个子任务）
+            for (const scheduledItem of planToApply.scheduledTasks) {
+                const task = scheduledItem.task;
+                
+                // 如果是灵活任务被调度了，转换为固定任务
+                if (task.type === 'flexible' && scheduledItem.scheduledStart && scheduledItem.scheduledEnd) {
+                    // 创建新的固定任务
+                    const updatedTask = {
+                        ...task,
+                        type: 'fixed',
+                        startTime: scheduledItem.scheduledStart,
+                        endTime: scheduledItem.scheduledEnd,
+                        estimatedDuration: null,
+                        id: null  // 让后端生成新ID
+                    };
+                    
+                    await saveTask(updatedTask);
+                } else if (task.type === 'fixed') {
+                    // 固定任务直接保存
+                    await saveTask({...task, id: null});
                 }
-                
-                // 创建新的固定任务
-                const updatedTask = {
-                    ...taskWithId,
-                    type: 'fixed',
-                    startTime: scheduledItem.scheduledStart,
-                    endTime: scheduledItem.scheduledEnd,
-                    estimatedDuration: null
-                };
-                
-                await saveTask(updatedTask);
-            } else if (task.type === 'fixed') {
-                // 固定任务直接使用原有时间，已经保存过了，不需要额外操作
-                console.log('固定任务已保存，使用原有时间');
             }
         }
         
@@ -940,13 +1042,49 @@ async function confirmSchedule() {
 }
 
 /**
+ * 更新任务状态
+ */
+async function updateTaskStatus(taskId, newStatus) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/v1/tasks/${taskId}/status`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({status: newStatus})
+        });
+        
+        if (!response.ok) {
+            throw new Error('更新失败');
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('更新任务状态失败:', error);
+        throw error;
+    }
+}
+
+/**
  * 标记任务完成
  */
 async function markTaskComplete(taskId) {
-    // 简化实现：从列表中移除
     try {
-        await deleteTask(taskId);
-        showToast('任务已完成！', 'success');
+        await updateTaskStatus(taskId, 'completed');
+        showToast('任务已完成！✓', 'success');
+        await refreshData();
+    } catch (error) {
+        showToast(`操作失败：${error.message}`, 'error');
+    }
+}
+
+/**
+ * 恢复未完成状态
+ */
+async function markTaskIncomplete(taskId) {
+    try {
+        await updateTaskStatus(taskId, 'pending');
+        showToast('任务已恢复为待办状态', 'info');
         await refreshData();
     } catch (error) {
         showToast(`操作失败：${error.message}`, 'error');
@@ -985,6 +1123,8 @@ function handleExampleClick(event) {
  * 切换Tab
  */
 function switchTab(tabName) {
+    console.log('切换到Tab:', tabName);
+    
     // 更新tab按钮
     document.querySelectorAll('.tab').forEach(tab => {
         tab.classList.remove('active');
@@ -998,11 +1138,408 @@ function switchTab(tabName) {
         content.classList.remove('active');
     });
     
-    if (tabName === 'input') {
-        document.getElementById('input-tab').classList.add('active');
-    } else if (tabName === 'schedule') {
-        document.getElementById('schedule-tab').classList.add('active');
+    const targetTab = document.getElementById(`${tabName}-tab`);
+    if (targetTab) {
+        targetTab.classList.add('active');
+        console.log(`✓ Tab ${tabName} 已激活`);
+    } else {
+        console.error(`❌ 找不到Tab: ${tabName}-tab`);
     }
+}
+
+/**
+ * 渲染免打扰时间段
+ */
+function renderNoDisturbSlots(slots = []) {
+    const container = document.getElementById('no-disturb-slots-container');
+    container.innerHTML = '';
+    
+    if (slots.length === 0) {
+        container.innerHTML = '<p class="help-text-small" style="font-style: italic;">暂无免打扰时间段</p>';
+        return;
+    }
+    
+    slots.forEach((slot, index) => {
+        const div = document.createElement('div');
+        div.className = 'no-disturb-slot';
+        div.innerHTML = `
+            <span style="min-width: 60px;">时段${index + 1}：</span>
+            <input type="time" class="nd-start" value="${slot.start}" data-index="${index}">
+            <span>至</span>
+            <input type="time" class="nd-end" value="${slot.end}" data-index="${index}">
+            <button class="btn-remove-slot" onclick="removeNoDisturbSlot(${index})">✗ 删除</button>
+        `;
+        container.appendChild(div);
+    });
+}
+
+/**
+ * 添加免打扰时间段
+ */
+function addNoDisturbSlot() {
+    const container = document.getElementById('no-disturb-slots-container');
+    
+    // 移除"暂无"提示
+    const emptyMsg = container.querySelector('.help-text-small');
+    if (emptyMsg) {
+        emptyMsg.remove();
+    }
+    
+    const index = container.children.length;
+    const div = document.createElement('div');
+    div.className = 'no-disturb-slot';
+    div.innerHTML = `
+        <span style="min-width: 60px;">时段${index + 1}：</span>
+        <input type="time" class="nd-start" value="12:00" data-index="${index}">
+        <span>至</span>
+        <input type="time" class="nd-end" value="13:00" data-index="${index}">
+        <button class="btn-remove-slot" onclick="removeNoDisturbSlot(${index})">✗ 删除</button>
+    `;
+    container.appendChild(div);
+}
+
+/**
+ * 删除免打扰时间段
+ */
+function removeNoDisturbSlot(index) {
+    const container = document.getElementById('no-disturb-slots-container');
+    const slots = container.querySelectorAll('.no-disturb-slot');
+    
+    if (slots[index]) {
+        slots[index].remove();
+        
+        // 重新编号
+        const remainingSlots = container.querySelectorAll('.no-disturb-slot');
+        remainingSlots.forEach((slot, i) => {
+            const span = slot.querySelector('span');
+            span.textContent = `时段${i + 1}：`;
+            slot.querySelector('.nd-start').dataset.index = i;
+            slot.querySelector('.nd-end').dataset.index = i;
+            slot.querySelector('.btn-remove-slot').onclick = () => removeNoDisturbSlot(i);
+        });
+        
+        // 如果没有时间段了，显示提示
+        if (remainingSlots.length === 0) {
+            container.innerHTML = '<p class="help-text-small" style="font-style: italic;">暂无免打扰时间段</p>';
+        }
+    }
+}
+
+/**
+ * 加载偏好设置到表单
+ */
+async function loadPreferencesToForm() {
+    const preferences = await fetchPreferences();
+    const status = await fetchUserStatus();
+    
+    if (preferences) {
+        // 工作时间
+        if (preferences.workingHours && preferences.workingHours.length > 0) {
+            const workHour = preferences.workingHours[0];
+            document.getElementById('pref-work-start').value = workHour.start;
+            document.getElementById('pref-work-end').value = workHour.end;
+        }
+        
+        // 免打扰时间段
+        renderNoDisturbSlots(preferences.noDisturbSlots || []);
+        
+        // 专注设置
+        document.getElementById('pref-max-focus').value = preferences.maxFocusDuration;
+        document.getElementById('pref-min-block').value = preferences.minBlockUnit;
+        document.getElementById('pref-buffer').value = preferences.bufferBetweenEvents;
+    }
+    
+    if (status) {
+        document.getElementById('user-status-select').value = status.status;
+        document.getElementById('rest-mode-toggle').checked = status.restMode;
+    }
+}
+
+/**
+ * 收集免打扰时间段
+ */
+function collectNoDisturbSlots() {
+    const container = document.getElementById('no-disturb-slots-container');
+    const slotElements = container.querySelectorAll('.no-disturb-slot');
+    const slots = [];
+    
+    slotElements.forEach(element => {
+        const start = element.querySelector('.nd-start').value;
+        const end = element.querySelector('.nd-end').value;
+        if (start && end) {
+            slots.push({start, end});
+        }
+    });
+    
+    return slots;
+}
+
+/**
+ * 保存偏好设置
+ */
+async function handleSavePreferences() {
+    try {
+        setLoading(true);
+        
+        // 从表单收集数据
+        const workStart = document.getElementById('pref-work-start').value;
+        const workEnd = document.getElementById('pref-work-end').value;
+        const maxFocus = parseInt(document.getElementById('pref-max-focus').value);
+        const minBlock = parseInt(document.getElementById('pref-min-block').value);
+        const buffer = parseInt(document.getElementById('pref-buffer').value);
+        
+        // 收集免打扰时间段
+        const noDisturbSlots = collectNoDisturbSlots();
+        
+        const preferences = {
+            workingHours: [{start: workStart, end: workEnd}],
+            noDisturbSlots: noDisturbSlots,
+            maxFocusDuration: maxFocus,
+            minBlockUnit: minBlock,
+            bufferBetweenEvents: buffer
+        };
+        
+        await savePreferences(preferences);
+        
+        // 保存状态
+        const userStatus = {
+            status: document.getElementById('user-status-select').value,
+            restMode: document.getElementById('rest-mode-toggle').checked,
+            currentActivity: null
+        };
+        
+        await updateUserStatus(userStatus);
+        
+        showToast('设置已保存！', 'success');
+        
+    } catch (error) {
+        showToast(`保存失败：${error.message}`, 'error');
+    } finally {
+        setLoading(false);
+    }
+}
+
+/**
+ * 恢复默认设置
+ */
+async function handleResetPreferences() {
+    if (!confirm('确定要恢复默认设置吗？')) {
+        return;
+    }
+    
+    try {
+        setLoading(true);
+        
+        const defaultPreferences = {
+            workingHours: [{start: "09:00", end: "18:00"}],
+            noDisturbSlots: [],
+            maxFocusDuration: 120,
+            minBlockUnit: 30,
+            bufferBetweenEvents: 15
+        };
+        
+        await savePreferences(defaultPreferences);
+        
+        const defaultStatus = {
+            status: "idle",
+            restMode: false,
+            currentActivity: null
+        };
+        
+        await updateUserStatus(defaultStatus);
+        
+        // 重新加载到表单
+        await loadPreferencesToForm();
+        
+        showToast('已恢复默认设置！', 'success');
+        
+    } catch (error) {
+        showToast(`操作失败：${error.message}`, 'error');
+    } finally {
+        setLoading(false);
+    }
+}
+
+/**
+ * 切换设置模式
+ */
+function switchSettingsMode(mode) {
+    // 更新模式标签
+    document.querySelectorAll('.mode-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.dataset.mode === mode) {
+            tab.classList.add('active');
+        }
+    });
+    
+    // 更新模式内容
+    document.querySelectorAll('.settings-mode').forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    document.getElementById(`${mode}-mode`).classList.add('active');
+}
+
+/**
+ * AI解析偏好
+ */
+async function handleAIParsePreference() {
+    const input = document.getElementById('ai-preference-input');
+    const text = input.value.trim();
+    
+    if (!text) {
+        showToast('请描述你的工作习惯', 'error');
+        return;
+    }
+    
+    try {
+        setLoading(true);
+        
+        const response = await fetch(`${API_BASE_URL}/v1/user/preferences/parse`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({text})
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'AI解析失败');
+        }
+        
+        const data = await response.json();
+        
+        // 显示解析结果
+        renderAIPreferenceResult(data);
+        
+        // 自动应用到手动设置表单
+        applyPreferenceToForm(data.preference);
+        
+        showToast('AI解析成功！', 'success');
+        
+    } catch (error) {
+        showToast(`AI解析失败：${error.message}`, 'error');
+    } finally {
+        setLoading(false);
+    }
+}
+
+/**
+ * 渲染AI解析结果
+ */
+function renderAIPreferenceResult(data) {
+    const container = document.getElementById('ai-preference-result');
+    const { preference, summary } = data;
+    
+    let html = '<h4>✨ AI为你生成的偏好设置</h4>';
+    html += `<p style="margin-bottom: 16px; color: var(--primary-color); font-weight: 600;">${summary}</p>`;
+    html += '<div class="ai-result-items">';
+    
+    // 工作时间
+    if (preference.workingHours && preference.workingHours.length > 0) {
+        const wh = preference.workingHours[0];
+        html += `
+            <div class="ai-result-item">
+                <span class="ai-result-label">工作时间：</span>
+                <span class="ai-result-value">${wh.start} - ${wh.end}</span>
+            </div>
+        `;
+    }
+    
+    // 午餐时间
+    if (preference.noDisturbSlots && preference.noDisturbSlots.length > 0) {
+        preference.noDisturbSlots.forEach(slot => {
+            html += `
+                <div class="ai-result-item">
+                    <span class="ai-result-label">免打扰时段：</span>
+                    <span class="ai-result-value">${slot.start} - ${slot.end}</span>
+                </div>
+            `;
+        });
+    }
+    
+    html += `
+        <div class="ai-result-item">
+            <span class="ai-result-label">最大专注时长：</span>
+            <span class="ai-result-value">${preference.maxFocusDuration}分钟</span>
+        </div>
+        <div class="ai-result-item">
+            <span class="ai-result-label">最小时间块：</span>
+            <span class="ai-result-value">${preference.minBlockUnit}分钟</span>
+        </div>
+        <div class="ai-result-item">
+            <span class="ai-result-label">事件间缓冲：</span>
+            <span class="ai-result-value">${preference.bufferBetweenEvents}分钟</span>
+        </div>
+    `;
+    
+    html += '</div>';
+    html += '<p style="margin-top: 16px; font-size: 0.9rem; color: var(--text-secondary);">💡 这些设置已自动填入手动设置表单，点击下方"保存设置"即可应用。</p>';
+    
+    container.innerHTML = html;
+    container.style.display = 'block';
+}
+
+/**
+ * 应用偏好到表单
+ */
+function applyPreferenceToForm(preference) {
+    if (preference.workingHours && preference.workingHours.length > 0) {
+        const wh = preference.workingHours[0];
+        document.getElementById('pref-work-start').value = wh.start;
+        document.getElementById('pref-work-end').value = wh.end;
+    }
+    
+    // 渲染免打扰时间段
+    renderNoDisturbSlots(preference.noDisturbSlots || []);
+    
+    document.getElementById('pref-max-focus').value = preference.maxFocusDuration;
+    document.getElementById('pref-min-block').value = preference.minBlockUnit;
+    document.getElementById('pref-buffer').value = preference.bufferBetweenEvents;
+}
+
+/**
+ * 问卷生成偏好
+ */
+function handleQuizGenerate() {
+    // 获取问卷答案
+    const workStartTime = document.querySelector('input[name="work-start-time"]:checked').value;
+    const focusDuration = parseInt(document.querySelector('input[name="focus-duration"]:checked').value);
+    const bestTime = document.querySelector('input[name="best-time"]:checked').value;
+    const bufferTime = parseInt(document.querySelector('input[name="buffer-time"]:checked').value);
+    
+    // 根据答案生成偏好
+    let workStart, workEnd;
+    
+    if (workStartTime === 'early') {
+        workStart = '07:00';
+        workEnd = '16:00';
+    } else if (workStartTime === 'normal') {
+        workStart = '09:00';
+        workEnd = '18:00';
+    } else { // late
+        workStart = '10:00';
+        workEnd = '19:00';
+    }
+    
+    // 如果是夜猫子，调整工作时间
+    if (bestTime === 'evening') {
+        workStart = '14:00';
+        workEnd = '23:00';
+    }
+    
+    // 应用到表单
+    document.getElementById('pref-work-start').value = workStart;
+    document.getElementById('pref-work-end').value = workEnd;
+    document.getElementById('pref-max-focus').value = focusDuration;
+    document.getElementById('pref-min-block').value = Math.min(30, focusDuration / 2);
+    document.getElementById('pref-buffer').value = bufferTime;
+    
+    // 切换到手动模式显示结果
+    switchSettingsMode('manual');
+    
+    showToast('✨ 偏好设置已生成！请检查并保存。', 'success');
 }
 
 // ==================== 初始化 ====================
@@ -1020,6 +1557,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 渲染今天的日程
     renderDailySchedule(selectedDate);
     
+    // 加载偏好设置
+    await loadPreferencesToForm();
+    
     // 绑定事件
     document.getElementById('parse-btn').addEventListener('click', handleParseClick);
     document.getElementById('save-task-btn').addEventListener('click', handleSaveTask);
@@ -1027,10 +1567,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('refresh-schedule-btn').addEventListener('click', refreshData);
     document.querySelector('.examples').addEventListener('click', handleExampleClick);
     
+    // 设置相关
+    document.getElementById('save-preferences-btn').addEventListener('click', handleSavePreferences);
+    document.getElementById('reset-preferences-btn').addEventListener('click', handleResetPreferences);
+    
+    // 设置模式切换
+    document.querySelectorAll('.mode-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            switchSettingsMode(tab.dataset.mode);
+        });
+    });
+    
+    // 免打扰时间段
+    document.getElementById('add-no-disturb-btn').addEventListener('click', addNoDisturbSlot);
+    
+    // AI理解模式
+    document.getElementById('ai-parse-preference-btn').addEventListener('click', handleAIParsePreference);
+    
+    // 智能问卷模式
+    document.getElementById('quiz-generate-btn').addEventListener('click', handleQuizGenerate);
+    
     // Tab切换事件
     document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', () => {
             switchTab(tab.dataset.tab);
+            // 切换到设置tab时重新加载设置
+            if (tab.dataset.tab === 'settings') {
+                loadPreferencesToForm();
+            }
         });
     });
     

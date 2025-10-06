@@ -109,7 +109,49 @@ class LLMService:
         try:
             return json.loads(content)
         except json.JSONDecodeError as e:
-            raise LLMServiceError(f"Failed to parse JSON response: {e}\nContent: {content}")
+            # 如果解析失败，可能是LLM返回了多个JSON对象
+            # 尝试只取第一个完整的JSON对象
+            try:
+                # 找到第一个 { 和对应的 }
+                start_idx = content.find('{')
+                if start_idx == -1:
+                    raise LLMServiceError(f"No JSON object found in response: {content}")
+                
+                # 简单的括号匹配，找到第一个完整的JSON对象
+                brace_count = 0
+                end_idx = start_idx
+                in_string = False
+                escape_next = False
+                
+                for i in range(start_idx, len(content)):
+                    char = content[i]
+                    
+                    if escape_next:
+                        escape_next = False
+                        continue
+                    
+                    if char == '\\':
+                        escape_next = True
+                        continue
+                    
+                    if char == '"':
+                        in_string = not in_string
+                        continue
+                    
+                    if not in_string:
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                end_idx = i + 1
+                                break
+                
+                first_json = content[start_idx:end_idx]
+                return json.loads(first_json)
+                
+            except Exception as parse_error:
+                raise LLMServiceError(f"Failed to parse JSON response: {e}\nContent: {content[:200]}...")
     
     def parse_text_to_task(
         self,
@@ -146,15 +188,28 @@ class LLMService:
         return """你是一个专业的日程管理助手。你的任务是将用户的自然语言描述解析为结构化的任务数据。
 
 【重要】任务类型判断规则：
-1. **fixed（固定任务）**：用户明确说了具体的开始和结束时间
-   - 例子："明天上午10点到11点开会" → type: "fixed"
-   - 例子："下周三下午2点在会议室开会" → type: "fixed"
-   - 关键词：X点到Y点、X时至Y时、具体时间段
+
+1. **fixed（固定任务）**：用户说了具体的时间点开始做某事
+   - "X点有作业/会议/任务" → type: "fixed"（从X点开始）
+   - 例子："明天下午4点有作业要写" → type: "fixed", startHour: 16
+   - 例子："明天上午10点到11点开会" → type: "fixed", startHour: 10, endHour: 11
+   - 例子："下周三下午2点开会" → type: "fixed", startHour: 14
+   - 关键词：
+     * X点有XXX
+     * X点到Y点
+     * X点XXX（如"3点开会"）
+   - 如果只说了开始时间，没说持续多久：
+     * 会议默认1小时
+     * 其他任务用estimatedDuration表示
    
-2. **flexible（灵活任务）**：只说了需要多长时间，没有指定具体何时开始
-   - 例子："明天下午做2小时报告" → type: "flexible"
+2. **flexible（灵活任务）**：只说了时间段或需要多长时间，没有具体时间点
+   - "下午做2小时报告" → type: "flexible"（下午某个时候，不是具体几点）
+   - "明天做作业，需要半小时" → type: "flexible"
    - 例子："写周报，大概需要1小时" → type: "flexible"
-   - 关键词：做X小时、需要X时间、大概X分钟
+   - 关键词：
+     * 做X小时
+     * 需要X时间
+     * 上午/下午/晚上做XXX（没说具体几点）
 
 优先级说明：
 - P0: 紧急且重要（关键词：紧急、必须、立即、马上）
@@ -167,17 +222,32 @@ class LLMService:
 【重要】不要自己计算具体日期！只提取时间关键词，具体日期由系统计算。
 
 1. 固定任务(fixed)格式：
+
+情况A - 明确了开始和结束时间：
 {
   "title": "会议",
   "type": "fixed",
-  "relativeDate": "下周一",  ← 提取关键词，不计算具体日期
-  "startHour": 10,          ← 只提取小时数
-  "endHour": 11,            ← 只提取小时数
-  "startMinute": 0,         ← 分钟（可选，默认0）
-  "endMinute": 0,           ← 分钟（可选，默认0）
-  "priority": "P1",
-  "location": "会议室"       ← 可选
+  "relativeDate": "下周一",
+  "startHour": 10,
+  "endHour": 11,
+  "startMinute": 0,
+  "endMinute": 0,
+  "priority": "P1"
 }
+
+情况B - 只说了开始时间，给了持续时长：
+{
+  "title": "写作业",
+  "type": "fixed",
+  "relativeDate": "明天",
+  "startHour": 16,           ← "下午4点"
+  "estimatedDuration": 30,   ← "半小时"，系统会自动算出endHour=16.5
+  "priority": "P2"
+}
+
+注意：
+- "下午4点有作业" → startHour: 16, estimatedDuration: 30（如果说了时长）
+- "下午4点到5点" → startHour: 16, endHour: 17
 
 2. 灵活任务(flexible)格式：
 {
@@ -302,9 +372,24 @@ class LLMService:
             end_hour = data.get("endHour")
             start_minute = data.get("startMinute", 0)
             end_minute = data.get("endMinute", 0)
+            estimated_duration = data.get("estimatedDuration")
             
-            if start_hour is None or end_hour is None:
-                raise LLMServiceError("Fixed task must have startHour and endHour")
+            if start_hour is None:
+                raise LLMServiceError("Fixed task must have startHour")
+            
+            # 如果没有endHour，但有estimatedDuration，自动计算endHour
+            if end_hour is None and estimated_duration:
+                # 根据时长计算结束时间
+                end_hour = start_hour + (estimated_duration // 60)
+                end_minute = start_minute + (estimated_duration % 60)
+                # 处理分钟溢出
+                if end_minute >= 60:
+                    end_hour += 1
+                    end_minute -= 60
+            elif end_hour is None:
+                # 既没有endHour也没有estimatedDuration，默认1小时
+                end_hour = start_hour + 1
+                end_minute = start_minute
             
             # 使用date_parser精确计算日期
             target_date = parse_relative_date(relative_date, current_time)

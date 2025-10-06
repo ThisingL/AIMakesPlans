@@ -48,6 +48,7 @@
                 <div class="tabs">
                     <button class="tab active" data-tab="input">📝 创建任务</button>
                     <button class="tab" data-tab="schedule">📋 当日日程</button>
+                    <button class="tab" data-tab="settings">⚙️ 设置</button>
                 </div>
 
                 <!-- Tab 内容：创建任务 -->
@@ -113,6 +114,203 @@
                         </div>
                         <div id="daily-schedule" class="daily-schedule">
                             <p class="empty-state">选择日期查看该日的日程安排</p>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Tab 内容：设置 -->
+                <div id="settings-tab" class="tab-content">
+                    <section class="settings-section">
+                        <h2>⚙️ 偏好设置</h2>
+                        
+                        <!-- 模式切换 -->
+                        <div class="settings-mode-tabs">
+                            <button class="mode-tab active" data-mode="manual">🖱️ 手动设置</button>
+                            <button class="mode-tab" data-mode="ai">🤖 AI理解</button>
+                            <button class="mode-tab" data-mode="quiz">📝 智能问卷</button>
+                        </div>
+
+                        <!-- 手动设置模式 -->
+                        <div id="manual-mode" class="settings-mode active">
+                            <div class="settings-group">
+                                <h3>⏰ 工作时间</h3>
+                                <div class="setting-item">
+                                    <label>开始时间：</label>
+                                    <input type="time" id="pref-work-start" value="09:00">
+                                </div>
+                                <div class="setting-item">
+                                    <label>结束时间：</label>
+                                    <input type="time" id="pref-work-end" value="18:00">
+                                </div>
+                            </div>
+
+                            <div class="settings-group">
+                                <h3>🚫 免打扰时间段</h3>
+                                <p class="help-text-small">设置不希望被安排任务的时间（如午餐、晚餐、休息等）</p>
+                                <div id="no-disturb-slots-container">
+                                    <!-- 免打扰时间段将动态添加到这里 -->
+                                </div>
+                                <button id="add-no-disturb-btn" class="btn-small btn-secondary">
+                                    ➕ 添加时间段
+                                </button>
+                            </div>
+
+                            <div class="settings-group">
+                                <h3>🎯 专注设置</h3>
+                                <div class="setting-item">
+                                    <label>最大专注时长：</label>
+                                    <input type="number" id="pref-max-focus" value="120" min="30" max="480">
+                                    <span>分钟</span>
+                                </div>
+                                <div class="setting-item">
+                                    <label>最小时间块：</label>
+                                    <input type="number" id="pref-min-block" value="30" min="15" max="120">
+                                    <span>分钟</span>
+                                </div>
+                                <div class="setting-item">
+                                    <label>事件间缓冲：</label>
+                                    <input type="number" id="pref-buffer" value="15" min="0" max="60">
+                                    <span>分钟</span>
+                                </div>
+                            </div>
+
+                            <div class="settings-group">
+                                <h3>📊 用户状态</h3>
+                                <div class="setting-item">
+                                    <label>当前状态：</label>
+                                    <select id="user-status-select">
+                                        <option value="idle">空闲</option>
+                                        <option value="busy">忙碌</option>
+                                    </select>
+                                </div>
+                                <div class="setting-item">
+                                    <label>
+                                        <input type="checkbox" id="rest-mode-toggle">
+                                        休息模式（暂停自动调度）
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- AI理解模式 -->
+                        <div id="ai-mode" class="settings-mode">
+                            <div class="ai-description">
+                                <p class="help-text">用自然语言描述你的工作习惯，AI会帮你生成最适合的偏好设置。</p>
+                                <p class="help-text"><strong>示例：</strong></p>
+                                <ul class="help-list">
+                                    <li>我是程序员，每天早上9点开始工作，到下午6点。我习惯上午做深度思考的工作...</li>
+                                    <li>我是学生，早上8点上课，中午12点到1点午休，下午有课...</li>
+                                    <li>我喜欢晚上工作，从晚上8点到凌晨，每次能专注3小时...</li>
+                                </ul>
+                            </div>
+                            <textarea 
+                                id="ai-preference-input" 
+                                placeholder="描述你的工作习惯，例如：&#10;&#10;我是设计师，每天早上9点半开始工作，到下午6点。&#10;我习惯上午做创意性工作，下午处理反馈和沟通。&#10;我能连续工作90分钟，需要15分钟休息。&#10;中午12点到1点是午餐时间。"
+                                rows="6"
+                            ></textarea>
+                            <button id="ai-parse-preference-btn" class="btn btn-primary">
+                                <span class="btn-icon">✨</span>
+                                让AI帮我设置
+                            </button>
+                            
+                            <!-- AI解析结果 -->
+                            <div id="ai-preference-result" class="ai-result" style="display: none;"></div>
+                        </div>
+
+                        <!-- 智能问卷模式 -->
+                        <div id="quiz-mode" class="settings-mode">
+                            <div class="quiz-container">
+                                <div class="quiz-question">
+                                    <h3>Q1: 你通常几点开始工作/学习？</h3>
+                                    <div class="quiz-options">
+                                        <label class="quiz-option">
+                                            <input type="radio" name="work-start-time" value="early">
+                                            <span>🌅 早起型（7-8点）</span>
+                                        </label>
+                                        <label class="quiz-option">
+                                            <input type="radio" name="work-start-time" value="normal" checked>
+                                            <span>☀️ 正常型（9-10点）</span>
+                                        </label>
+                                        <label class="quiz-option">
+                                            <input type="radio" name="work-start-time" value="late">
+                                            <span>🌤️ 晚起型（10-11点）</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="quiz-question">
+                                    <h3>Q2: 你每次能专注多久？</h3>
+                                    <div class="quiz-options">
+                                        <label class="quiz-option">
+                                            <input type="radio" name="focus-duration" value="30">
+                                            <span>⚡ 短时高频（30分钟）</span>
+                                        </label>
+                                        <label class="quiz-option">
+                                            <input type="radio" name="focus-duration" value="60">
+                                            <span>⏱️ 标准专注（1小时）</span>
+                                        </label>
+                                        <label class="quiz-option">
+                                            <input type="radio" name="focus-duration" value="120" checked>
+                                            <span>🎯 深度专注（2小时）</span>
+                                        </label>
+                                        <label class="quiz-option">
+                                            <input type="radio" name="focus-duration" value="180">
+                                            <span>🧠 超长专注（3小时+）</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="quiz-question">
+                                    <h3>Q3: 你什么时候效率最高？</h3>
+                                    <div class="quiz-options">
+                                        <label class="quiz-option">
+                                            <input type="radio" name="best-time" value="morning" checked>
+                                            <span>🌄 早晨型（上午效率高）</span>
+                                        </label>
+                                        <label class="quiz-option">
+                                            <input type="radio" name="best-time" value="afternoon">
+                                            <span>☀️ 下午型（下午效率高）</span>
+                                        </label>
+                                        <label class="quiz-option">
+                                            <input type="radio" name="best-time" value="evening">
+                                            <span>🌙 夜猫子（晚上效率高）</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="quiz-question">
+                                    <h3>Q4: 任务之间需要多少缓冲时间？</h3>
+                                    <div class="quiz-options">
+                                        <label class="quiz-option">
+                                            <input type="radio" name="buffer-time" value="5">
+                                            <span>⚡ 快节奏（5分钟）</span>
+                                        </label>
+                                        <label class="quiz-option">
+                                            <input type="radio" name="buffer-time" value="15" checked>
+                                            <span>⏱️ 标准（15分钟）</span>
+                                        </label>
+                                        <label class="quiz-option">
+                                            <input type="radio" name="buffer-time" value="30">
+                                            <span>🧘 充分休息（30分钟）</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <button id="quiz-generate-btn" class="btn btn-primary">
+                                    <span class="btn-icon">🎯</span>
+                                    生成我的偏好设置
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 保存按钮区 -->
+                        <div class="settings-actions">
+                            <button id="save-preferences-btn" class="btn btn-primary">
+                                💾 保存设置
+                            </button>
+                            <button id="reset-preferences-btn" class="btn btn-secondary">
+                                🔄 恢复默认
+                            </button>
                         </div>
                     </section>
                 </div>

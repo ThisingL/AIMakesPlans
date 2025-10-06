@@ -525,6 +525,7 @@ textarea::placeholder {
     border-radius: 8px;
     border-left: 4px solid var(--primary-color);
     transition: all 0.2s;
+    position: relative;
 }
 
 .schedule-item:hover {
@@ -541,8 +542,30 @@ textarea::placeholder {
 }
 
 .schedule-item.completed {
-    opacity: 0.6;
+    opacity: 0.7;
     border-left-color: var(--success-color);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(16, 185, 129, 0.1));
+}
+
+.schedule-item.completed .schedule-item-title {
+    text-decoration: line-through;
+    color: var(--text-secondary);
+}
+
+.schedule-item.completed .schedule-item-time {
+    color: var(--success-color);
+    font-weight: 600;
+}
+
+.schedule-item.completed::before {
+    content: '✓';
+    position: absolute;
+    left: -12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.5rem;
+    color: var(--success-color);
+    font-weight: bold;
 }
 
 .schedule-item-header {
@@ -788,6 +811,299 @@ textarea::placeholder {
     margin-top: 16px;
     font-size: 0.95rem;
     line-height: 1.6;
+}
+
+/* ==================== 设置界面 ==================== */
+.settings-section {
+    /* 不设置max-width，让它和其他section保持一致 */
+}
+
+.settings-mode-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    background: var(--bg-color);
+    padding: 6px;
+    border-radius: 8px;
+}
+
+.mode-tab {
+    flex: 1;
+    padding: 12px 20px;
+    background: white;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.mode-tab:hover {
+    color: var(--primary-color);
+    background: rgba(79, 70, 229, 0.05);
+}
+
+.mode-tab.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.settings-mode {
+    display: none;
+}
+
+.settings-mode.active {
+    display: block;
+}
+
+.settings-group {
+    margin-bottom: 20px;
+    padding: 16px;
+    background: var(--bg-color);
+    border-radius: 8px;
+}
+
+.settings-group h3 {
+    font-size: 1.1rem;
+    margin-bottom: 16px;
+    color: var(--text-color);
+    font-weight: 600;
+}
+
+.setting-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.setting-item:last-child {
+    margin-bottom: 0;
+}
+
+.setting-item label {
+    min-width: 140px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.setting-item input[type="time"],
+.setting-item input[type="number"],
+.setting-item select {
+    padding: 10px 14px;
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+}
+
+.setting-item input[type="time"]:focus,
+.setting-item input[type="number"]:focus,
+.setting-item select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.setting-item input[type="number"] {
+    width: 100px;
+}
+
+.setting-item select {
+    min-width: 150px;
+}
+
+.setting-item input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.help-text-small {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.no-disturb-slot {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 12px;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+.no-disturb-slot input[type="time"] {
+    padding: 8px 12px;
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    font-family: inherit;
+}
+
+.no-disturb-slot input[type="time"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.btn-remove-slot {
+    background: var(--error-color);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+.btn-remove-slot:hover {
+    background: #dc2626;
+    transform: scale(1.05);
+}
+
+.btn-small {
+    padding: 8px 16px;
+    font-size: 0.9rem;
+}
+
+.settings-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 2px solid var(--border-color);
+}
+
+/* ==================== AI模式 ==================== */
+.ai-description {
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.05), rgba(6, 182, 212, 0.05));
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.help-text {
+    margin-bottom: 12px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.help-list {
+    list-style: none;
+    padding-left: 0;
+    margin-top: 8px;
+}
+
+.help-list li {
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    background: white;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.help-list li::before {
+    content: '💡 ';
+    margin-right: 4px;
+}
+
+.ai-result {
+    margin-top: 20px;
+    padding: 20px;
+    background: var(--bg-color);
+    border-radius: 8px;
+    border-left: 4px solid var(--success-color);
+}
+
+.ai-result h4 {
+    margin-bottom: 12px;
+    color: var(--text-color);
+}
+
+.ai-result-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.ai-result-item:last-child {
+    border-bottom: none;
+}
+
+.ai-result-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.ai-result-value {
+    color: var(--text-color);
+}
+
+/* ==================== 问卷模式 ==================== */
+.quiz-container {
+    background: var(--bg-color);
+    padding: 20px;
+    border-radius: 8px;
+}
+
+.quiz-question {
+    margin-bottom: 32px;
+}
+
+.quiz-question h3 {
+    font-size: 1.1rem;
+    margin-bottom: 16px;
+    color: var(--text-color);
+}
+
+.quiz-options {
+    display: grid;
+    gap: 12px;
+}
+
+.quiz-option {
+    display: flex;
+    align-items: center;
+    padding: 16px;
+    background: white;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.quiz-option:hover {
+    border-color: var(--primary-color);
+    background: rgba(79, 70, 229, 0.05);
+    transform: translateX(4px);
+}
+
+.quiz-option input[type="radio"] {
+    width: 20px;
+    height: 20px;
+    margin-right: 12px;
+    cursor: pointer;
+}
+
+.quiz-option input[type="radio"]:checked + span {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.quiz-option:has(input:checked) {
+    border-color: var(--primary-color);
+    background: rgba(79, 70, 229, 0.1);
 }
 
 /* ==================== 页脚 ==================== */
